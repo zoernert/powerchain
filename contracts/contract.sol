@@ -192,6 +192,9 @@ contract Metering {
 			add_debit=add_debit-add_credit;
 			add_credit=0;
 		}
+		if(add_credit+add_debit<balancable) {
+			add_debit+=(balancable-(add_credit+add_debit));
+		}
 		m.updateReading(reading_value,reading_time,add_debit,add_credit);
 	}
 	
@@ -324,6 +327,15 @@ contract Node {
 		uint256 add_debit;
 		for(uint i=0;i<deliveries.length;i++) {
 			if((deliveries[i].feed_in()==this)||(deliveries[i].feed_out()==this)) {
+			     // Partly Balancable limiter
+				 uint256 balance_here=balancable;
+				 if((time_start<deliveries[i].time_start())&&(time_end>deliveries[i].time_start())) {
+						balance_here=((deliveries[i].time_start()-time_start)/(time_end-time_start))*balance_here;				 
+				 }
+				 if((time_end>deliveries[i].time_end())&&(time_start<deliveries[i].time_end())) {
+						balance_here=((deliveries[i].time_end()-time_end)/(time_end-time_start))*balance_here;				 
+				 }
+				
 				if(deliveries[i].time_end()<time_end) {
 					archived_deliveries.push(deliveries[i]);
 					// todo instantiate clearing
@@ -340,19 +352,19 @@ contract Node {
 					} 
 					delete deliveries[i];
 				} else {
-					if(deliveries[i].time_start()>time_start) {
+					if(deliveries[i].time_start()<time_start) {
 						// Active Delivery
 						uint256 forwardable=0;
 						// Check Load Limits
-						if(deliveries[i].peek_load()<(balancable/(time_end-time_start)/3600) ) {
+						if(deliveries[i].peek_load()<(balance_here/(time_end-time_start)/3600) ) {
 							forwardable=deliveries[i].peek_load()*((time_end-time_start)/3600);
 						}	else {
-							forwardable=balancable;
+							forwardable=balance_here;
 						}					
-						if(deliveries[i].min_load()>(balancable/(time_end-time_start)/3600) ) {
+						if(deliveries[i].min_load()>(balance_here/(time_end-time_start)/3600) ) {
 							forwardable=deliveries[i].min_load()*((time_end-time_start)/3600);
 						} else {
-							forwardable=balancable;
+							forwardable=balance_here;
 						}
 						if(is_feedin) {
 							if(deliveries[i].feed_in()==this) {

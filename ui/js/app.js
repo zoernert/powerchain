@@ -122,6 +122,7 @@ function signPD(node,dir,pd) {
 	} else {
 		powerchain.obj[node].signBuyFeedOut(pd,100,{from:powerchain.obj[node].manager()});
 	}
+	location.reload(true);
 }
 function openTypedLink(address,abi) {
 	if(abi=="Account") {
@@ -135,13 +136,20 @@ function createDelivery(node) {
 	t=t/1000;
 	
 	powerchain.obj[node].createOffer(true,t+120,t+600,10,10,0,10,{from:powerchain.obj[node].manager()});
+	location.reload(true);
 	
 }
+
+
 
 function updateReading(meter) {
     var t = new Date().getTime();
 	t=t/1000;
 	powerchain.obj.metering.updateReading(powerchain.obj[meter].address,t,$('#meter_reading').val(),{from:powerchain.obj.metering.owner()});
 	$('#meter_reading').val(0);
+	location.reload(true);
 }
 loadDeployment();
+setInterval(function() {
+	$('#clock').html(new Date().toLocaleString());
+},10000);

@@ -1,0 +1,6 @@
+{
+  "name": "Powerchain",
+  "tagline": "SmartContracts developed to establish a Distributed Grid with  a light weight P2P energy market.",
+  "body": "# PowerChain\r\nThis is an early drop for Smart Contracts (Solidity/Ethereum) to operate a Micro-Smart-Grid. \r\n\r\n## Entities\r\n\r\n### Termination\r\nGrid Operator (DSO)\r\n\r\n### Metering\r\nSmart Meter Operator (Asset Owner)\r\n\r\n### Meter\r\nSmart Meter \r\n\r\n### Node\r\nGrid Node (Customer) \r\n\r\n### PoweDelivery\r\nPower Delivery Contract \r\n\r\n## Contributing\r\n- https://gitter.im/zoernert/powerchain\r\n- https://blog.stromhaltig.de/ ",
+  "note": "Don't delete this file! It's used internally to help with page regeneration."
+}

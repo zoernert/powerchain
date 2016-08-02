@@ -34,7 +34,7 @@
         <h1>
 <a id="powerchain" class="anchor" href="#powerchain" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>PowerChain</h1>
 
-<p>This is an early drop for Smart Contracts (Solidity/Ethereum) to operate a Micro-Smart-Grid. </p>
+<p>SmartContracts developed to establish a Distributed Grid with a light weight P2P energy market.</p>
 
 <h2>
 <a id="entities" class="anchor" href="#entities" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Entities</h2>
@@ -60,9 +60,38 @@
 <p>Grid Node (Customer) </p>
 
 <h3>
-<a id="powedelivery" class="anchor" href="#powedelivery" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>PoweDelivery</h3>
+<a id="powerdelivery" class="anchor" href="#powerdelivery" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>PowerDelivery</h3>
 
 <p>Power Delivery Contract </p>
+
+<h2>
+<a id="processes" class="anchor" href="#processes" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Processes</h2>
+
+<h3>
+<a id="sell-power--create-offer" class="anchor" href="#sell-power--create-offer" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Sell Power / Create Offer</h3>
+
+<p>In order to sell power an offer needs to be created. Offers are PowerDelivery contracts declaring:</p>
+
+<ul>
+<li>Feed In Node (Producer/Generator)</li>
+<li>Feed Out Node (Consumer/Endpoint)</li>
+<li>Total Power (Power in Watt-Hours to be contracted)</li>
+<li>Min Load (Minimum Load in Watt)</li>
+<li>Peak Load (Maximum Load in Watt)</li>
+<li>Bid Value (Ammount of "currency" to receive/spend)</li>
+<li>Time Start (Starting Time of delivery)</li>
+<li>Time End (End Time of delivery)</li>
+<li>Role of Owner (Feed In or Feed Out)</li>
+</ul>
+
+<p>As soon as a power delivery contract is visible from within the blockchain one other node may counter sign this contract.</p>
+
+<h3>
+<a id="sign-power-delivery-contract" class="anchor" href="#sign-power-delivery-contract" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Sign Power Delivery contract</h3>
+
+<p>Nodes are able to counter sign contracts. They are able to specify a lower/higher price.</p>
+
+<p>During signing a contract a test gets executed if both nodes are physically connected. </p>
 
 <h2>
 <a id="contributing" class="anchor" href="#contributing" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Contributing</h2>

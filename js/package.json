@@ -1,0 +1,29 @@
+{
+  "name": "powerchain",
+  "version": "0.0.0",
+  "description": "Simple Deployment.",    
+  "author": { "name" : "Thorsten Zoerner"
+				, "email" : "me@thorsten-zoerner.com"
+				, "url" : "https://blog.stromhaltig.de/"
+  },
+  "license": "MIT",
+  "dependencies": {  
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zoernert/powerchain.git"
+  },
+  
+  "keywords": [    
+    "ethereum",
+    "blockchain",
+    "smartgrid",
+    "metering",
+    "p2p"
+  ],
+  "bugs": {
+    "url": "https://github.com/zoernert/powerchain/issues"
+  },
+  "homepage": "https://github.com/zoernert/powechain#readme"
+}

@@ -1,3 +1,17 @@
+/*
+ PowerChain
+ ====================================================================================
+ A collection of SmartContracts developed to establish a Distributed Grid with 
+ a light weight P2P energy market.
+ 
+ GIT-Hub: https://github.com/zoernert/powerchain
+ 
+ 
+ Novell: https://blog.stromhaltig.de/
+
+*/
+
+
 contract PowerDelivery
 {
 	// Parties 
@@ -14,7 +28,7 @@ contract PowerDelivery
 	
 	// Commitment
 	uint256 public total_power;				// Total Power (Wh) covered by contract
-	uint256 public peek_load;				// Maximum Peek Load covered by contract (Max W)
+	uint256 public peak_load;				// Maximum peak Load covered by contract (Max W)
 	uint256 public min_load;				// Minimum Load covered by contract (Min W)
 	
 	uint256 public bid_in;					// Required amount of primary currency in order to close contract
@@ -23,7 +37,14 @@ contract PowerDelivery
 	uint256 public delivered_in;
 	uint256 public delivered_out;
 	
-	function PowerDelivery(bool _is_feedin,uint256 _time_start,uint256 _time_end,uint256 _total_power,uint256 _peek_load,uint256 _min_load,Termination _Termination_owner,uint256 _bid) {		 		 
+	// Balancing
+	SubBalance public subbalance_in;
+	SubBalance public subbalance_out;	
+	bool public openedBalances;
+	bool public closedBalances;
+	bool haspeer;
+	
+	function PowerDelivery(bool _is_feedin,uint256 _time_start,uint256 _time_end,uint256 _total_power,uint256 _peak_load,uint256 _min_load,Termination _Termination_owner,uint256 _bid) {		 		 
 		 if(_Termination_owner.nodes(msg.sender)!=1) throw;
 
 		 if(_time_start>0) {			 
@@ -33,38 +54,42 @@ contract PowerDelivery
 		 	time_end=_time_end;
 		 } else {time_end=time_start+86400;}
 		 total_power=_total_power;
-		 peek_load=_peek_load;
+		 peak_load=_peak_load;
 		 min_load=_min_load;
 		 product_owner=Node(msg.sender);
 		 Termination_owner=_Termination_owner;
-		 
+		 bid_in=_bid;
+		 ask_out=_bid;
 		 if(_is_feedin) {
-			 					feed_in=Node(msg.sender); 
-			 					bid_in=_bid;
-						} else {
-			 					feed_out=Node(msg.sender);
-		 						ask_out=_bid;
+			feed_in=Node(msg.sender); 
+			ask_out=_bid;
+			 				
+		} else {
+			feed_out=Node(msg.sender);
+			bid_in=_bid;		 
 		 }
+		 openedBalances=false;
+		 closedBalances=false;
+		 haspeer=false;
 	 }
 	
 	
 	 function sellFeedIn(uint256 _bid_in) {
+	 
 		 if(time_start<now) throw;
 		 if((feed_in==product_owner)&&(Node(msg.sender)!=product_owner)) throw;
-		 if(!testTermination(Node(msg.sender))) throw;
+		 if(!testTermination(Node(msg.sender))) throw; 
 		 if(_bid_in>ask_out) throw;
-		 if(feed_in==address(this)) {
-			 feed_in=Node(msg.sender);
-			bid_in=_bid_in;
-			
-		 } else {
-			 if(_bid_in<bid_in) {
-				 feed_in=Node(msg.sender);
+		 
+		  if(_bid_in<bid_in) {
+				feed_in=Node(msg.sender);
 				 bid_in=_bid_in;
+				 haspeer=true;
 			 } else {
 				 throw;
 			 }
-		 }
+		 
+		
 	}
 	
 	function buyFeedOut(uint256 _ask_out) {
@@ -73,27 +98,46 @@ contract PowerDelivery
 		if(!testTermination(Node(msg.sender)))throw;
 		if(_ask_out<bid_in) throw;
 		
-		if(feed_out==address(this)) {
-			feed_out=Node(msg.sender);
-			ask_out=_ask_out;
-		 } else {
-			 if(_ask_out>ask_out) {
+		
+		if(_ask_out>ask_out) {
 				 feed_out=Node(msg.sender);
 				 ask_out=_ask_out;
-			 } else {
-				 throw;
-			 }
-		 }
+				 haspeer=true;
+			} else {
+				throw;
+			}
+		 
+	}
+	
+	function openSubBalance() {
+		if((!openedBalances)&&(haspeer)) {
+			if((now>=time_start)&&(now<=time_end)) {
+				subbalance_in=feed_in.metering().openSubBalance(feed_in,this);
+				subbalance_out=feed_out.metering().openSubBalance(feed_out,this);
+				openedBalances=true;
+			}
+		}
+	}
+	
+	function closeSubBalance() {
+		if(!openedBalances) throw;
+		if(time_end<=now) {
+				feed_in.metering().closeSubBalance(subbalance_in);
+				feed_out.metering().closeSubBalance(subbalance_out);
+				closedBalances=true;
+		}		
 	}
 	
 	function deliveredIn(uint256 _value) {
-		if(Node(msg.sender)!=feed_in) throw;
+		if(SubBalance(msg.sender)!=subbalance_in) throw;
 		delivered_in+=_value;
 	}
+	
 	function deliveredOut(uint256 _value) {
-		if(Node(msg.sender)!=feed_out) throw;
+		if(SubBalance(msg.sender)!=subbalance_out) throw;
 		delivered_out+=_value;		
 	}
+	
 	
 	function testTermination(Node a) returns(bool) {
 		return Termination_owner.test(a);		
@@ -148,8 +192,12 @@ contract Meter {
 		power_debit+=add_debit;
 		power_credit+=add_credit;
 		last_reading_value=value;
-		last_reading_time=time;		
+		last_reading_time=time;			
+	}
 	
+	function addPDclosingDebit(uint256 add_debit) {
+		if(Metering(msg.sender)!=metering) throw;
+		power_debit+=add_debit;
 	}
 	function() {
 		if(msg.value>0) {
@@ -158,10 +206,82 @@ contract Meter {
 	}
 }
 
+contract SubBalance {
+	Metering public metering;
+	Node public node;
+	PowerDelivery public pd;
+	uint256 public balanced=0;
+	uint256 public open_time=0;
+	uint256 public last_update=0;
+	
+	
+	function SubBalance(Node _node, PowerDelivery _pd) {
+		metering=Metering(msg.sender);
+		node=_node;
+		pd=_pd;
+		open_time=now;
+	}
+	
+	function isFeedin() returns(bool) {
+		if(pd.feed_in()==node) return true;
+		if(pd.feed_out()==node) return false;	
+		throw;		
+	}
+	
+	function applyBalance(uint256 _balancable) returns(uint256) {
+		if(Metering(msg.sender)!=metering) throw;
+		
+		if(pd.time_start()>now) return _balancable;
+		if(pd.time_end()<now) return _balancable;
+		
+		if(_balancable>0) {
+			uint256 todo=0;
+			if(pd.feed_in()==node) {
+				if(pd.total_power()>pd.delivered_in()) {
+					todo=pd.total_power()-pd.delivered_in();	
+					if(todo<_balancable) {
+						_balancable=todo;			
+					}	
+					pd.deliveredIn(_balancable);
+				}
+			} else {
+				if(pd.total_power()>pd.delivered_out()) {
+					todo=pd.total_power()-pd.delivered_out();	
+					if(todo<_balancable) {
+						_balancable=todo;			
+					}	
+					pd.deliveredOut(_balancable);					
+				}			
+			}			
+			balanced+=_balancable;			
+		}		
+		last_update=now;
+		return _balancable;
+	}
+	
+	function closeBalance() returns(uint256) {
+		uint256 todo;
+		if(pd.feed_in()==node) {
+			if(pd.total_power()>pd.delivered_in()) {
+						todo=pd.total_power()-pd.delivered_in();	
+			}
+		} else {
+			if(pd.total_power()>pd.delivered_out()) {
+						todo=pd.total_power()-pd.delivered_out();	
+			}
+		}
+		balanced+=todo;
+		return todo;
+	}
+	
+}
+
 contract Metering {
 	address public owner;
 	mapping(address=>Meter) public meters;
 	mapping(address=>Node) public nodes;
+	SubBalance[] subbalances;
+	
 	
 	function Metering() {
 		owner=msg.sender;
@@ -171,6 +291,27 @@ contract Metering {
 		if(msg.sender!=owner) throw;
 		meters[_node]=meter;		
 		nodes[meter]=_node;
+	}
+	
+	function openSubBalance(Node n,PowerDelivery pd) returns (SubBalance) {
+		if(n.metering()!=this) throw;
+		// TODO Add Trigger Que for start/stop reading
+		SubBalance sb = new SubBalance(n,pd);
+		subbalances.push(sb);
+		return sb;
+	}
+	
+	function closeSubBalance(SubBalance sb) {
+		if(sb.node().metering()!=this) throw;
+		for(var i=0;i<subbalances.length;i++) {
+			if(subbalances[i]==sb) {
+				// if there is still something due we have to add it here 
+				uint256 add_debit = subbalances[i].closeBalance();
+				Meter m = Meter(meters[sb.node()]);
+				m.addPDclosingDebit(add_debit);
+				delete subbalances[i];
+			}
+		}
 	}
 	
 	function updateReading(Meter m,uint256 reading_time,uint256 reading_value) {
@@ -184,17 +325,15 @@ contract Metering {
 		uint256 last_time=m.last_reading_time();
 		if(reading_time==0)reading_time=now;
 		uint256 balancable=reading_value-last_value;
-		(add_credit,add_debit)=n.processPowerDelivery(balancable,last_time,reading_time,m.feed_in()); 
-		if(add_credit>add_debit) {
-			add_credit=add_credit-add_debit;
-			add_debit=0;
-		} else {
-			add_debit=add_debit-add_credit;
-			add_credit=0;
+		for(var i=0;((i<subbalances.length)&&(balancable>0));i++) {
+				if(subbalances[i].node()==n) {
+					if(m.feed_in()==subbalances[i].isFeedin()) {
+						balancable-=subbalances[i].applyBalance(balancable);
+					}
+				}
 		}
-		if(add_credit+add_debit<balancable) {
-			add_debit+=(balancable-(add_credit+add_debit));
-		}
+		add_credit=(reading_value-last_value)-balancable;
+		add_debit=balancable;
 		m.updateReading(reading_value,reading_time,add_debit,add_credit);
 	}
 	
@@ -212,7 +351,7 @@ contract Termination {
 	Termination[] public peers;
 	mapping(address=>uint) public nodes;
 	mapping(address=>uint) public meterings;
-		
+	event TestTermination(address _sender,address _target);
 	
 	function Termination() {
 		owner=msg.sender;				
@@ -259,7 +398,8 @@ contract Termination {
 		return test(d,this);			
 	}
 	
-	function test(Node _delivery,Termination callstack) returns (bool) {
+	function test(Node _delivery,Termination callstack) returns (bool) {			
+		TestTermination(msg.sender,_delivery);
 		if(nodes[_delivery]==1) return true;	
 
 		for(uint i=0;i<peers.length;i++) {		
@@ -267,6 +407,7 @@ contract Termination {
 		}
 		return false;
 	}
+	
 	function() {
 		if(msg.value>0) {
 			owner.send(msg.value);
@@ -303,10 +444,28 @@ contract Node {
 	}
 	
 	
-	function createOffer(bool _is_feedin,uint256 _time_start,uint256 _time_end,uint256 _total_power,uint256 _peek_load,uint256 _min_load,uint256 _bid) {
+	function createOffer(bool _is_feedin,uint256 _time_start,uint256 _time_end,uint256 _total_power,uint256 _peak_load,uint256 _min_load,uint256 _bid) {
 		if(msg.sender!=manager) throw;
-		PowerDelivery pd = new PowerDelivery(_is_feedin, _time_start,_time_end, _total_power, _peek_load,_min_load,termination,_bid);
+		PowerDelivery pd = new PowerDelivery(_is_feedin, _time_start,_time_end, _total_power, _peak_load,_min_load,termination,_bid);
 		deliveries.push(pd);
+	}
+	
+	function balanceDeliveries() {		
+		for(var i=0;i<deliveries.length;i++) {
+				if((deliveries[i].time_start()>=now)&&(deliveries[i].openedBalances()==false)) {
+					deliveries[i].openSubBalance();
+				}
+				if((deliveries[i].time_end()<=now)&&(deliveries[i].closedBalances()==false)) {
+					deliveries[i].closeSubBalance();
+				}
+				if((deliveries[i].feed_in()!=this)&&(deliveries[i].feed_out()!=this)) {
+					delete deliveries[i];
+				}
+				if(deliveries[i].closedBalances()) {
+					archived_deliveries.push(deliveries[i]);
+					delete deliveries[i];
+				}
+		}
 	}
 	
 	function signSellFeedIn(PowerDelivery pd,uint256 value) {
@@ -319,89 +478,7 @@ contract Node {
 		if(msg.sender!=manager) throw;
 		pd.buyFeedOut(value);	
 		deliveries.push(pd);
-	}
-	
-	function processPowerDelivery(uint256 balancable,uint256 time_start,uint256 time_end,bool is_feedin) returns (uint256,uint256) {
-		if(Metering(msg.sender)!=metering) throw;
-		uint256 add_credit;
-		uint256 add_debit;
-		for(uint i=0;i<deliveries.length;i++) {
-			if((deliveries[i].feed_in()==this)||(deliveries[i].feed_out()==this)) {
-			     // Partly Balancable limiter
-				 uint256 balance_here=balancable;
-				 if((time_start<deliveries[i].time_start())&&(time_end>deliveries[i].time_start())) {
-						balance_here=((deliveries[i].time_start()-time_start)/(time_end-time_start))*balance_here;				 
-				 }
-				 if((time_end>deliveries[i].time_end())&&(time_start<deliveries[i].time_end())) {
-						balance_here=((deliveries[i].time_end()-time_end)/(time_end-time_start))*balance_here;				 
-				 }
-				
-				if(deliveries[i].time_end()<time_end) {
-					archived_deliveries.push(deliveries[i]);
-					// todo instantiate clearing
-					// Missing Power booking
-					if(deliveries[i].feed_out()==this) {
-						if(deliveries[i].delivered_out()<deliveries[i].total_power()) {								
-							add_debit+=deliveries[i].total_power()-deliveries[i].delivered_out();
-						}
-					} 
-					if(deliveries[i].feed_in()==this) {
-						if(deliveries[i].delivered_in()<deliveries[i].total_power()) {								
-							add_debit+=deliveries[i].total_power()-deliveries[i].delivered_in();
-						}
-					} 
-					delete deliveries[i];
-				} else {
-					if(deliveries[i].time_start()<time_start) {
-						// Active Delivery
-						uint256 forwardable=0;
-						// Check Load Limits
-						if(deliveries[i].peek_load()<(balance_here/(time_end-time_start)/3600) ) {
-							forwardable=deliveries[i].peek_load()*((time_end-time_start)/3600);
-						}	else {
-							forwardable=balance_here;
-						}					
-						if(deliveries[i].min_load()>(balance_here/(time_end-time_start)/3600) ) {
-							forwardable=deliveries[i].min_load()*((time_end-time_start)/3600);
-						} else {
-							forwardable=balance_here;
-						}
-						if(is_feedin) {
-							if(deliveries[i].feed_in()==this) {
-								if(deliveries[i].delivered_in()+forwardable>deliveries[i].total_power()) {								
-									forwardable=deliveries[i].total_power()-deliveries[i].delivered_in();
-								}
-							} else {
-								add_debit+=forwardable;
-								forwardable=0;
-							}
-						} else {
-							if(deliveries[i].feed_out()==this) {
-								if(deliveries[i].delivered_out()+forwardable>deliveries[i].total_power()) {								
-									forwardable=deliveries[i].total_power()-deliveries[i].delivered_out();
-								}
-							} else {
-								add_debit+=forwardable;
-								forwardable=0;
-							}							
-						}
-						add_credit+=forwardable;
-						if(deliveries[i].feed_out()==this) {
-							deliveries[i].deliveredOut(forwardable);
-						} else {
-							deliveries[i].deliveredIn(forwardable);
-						}
-					}
-					
-				}
-			} else {
-				delete deliveries[i];
-			}
-			
-		}
-		return (add_credit,add_debit);
-		
-	}
+	}	
 	
 	function() {
 		if(msg.value>0) {

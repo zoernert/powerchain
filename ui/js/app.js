@@ -41,6 +41,10 @@ if(abi=="Node") {
 		i++;
 	} while(true) 
 	} catch(e) {}
+	/*
+	balanceDeliveries(name); // this is a dirty hack just to ensure we trigger balancing from time to time
+	setInterval(function() {balanceDeliveries(name);},30000);
+	*/
 }
 if(abi=="Metering") {
 	html+="<tr><td>Owner</td><td>"+typedLinkBuilder(powerchain.obj[name].owner(),'Account')+"</td></tr>";	
@@ -73,7 +77,7 @@ if(abi=="PowerDelivery") {
 	if(powerchain.obj[name].feed_in()!=powerchain.null_addr) {
 		html+="<tr><td>Feed In</td><td>"+typedLinkBuilder(powerchain.obj[name].feed_in(),'Node')+"</td></tr>";	
 	} else {
-		html+="<tr><td>Feed In</td><td><button class='btn btn-primary' onclick='signPD(\"node_a\",\"in\",\""+powerchain.obj[name].address+"\")'>Sign as Node A</button>&nbsp;<button class='btn btn-primary' onclick='signPD(\"node_a\",\"in\",\""+powerchain.obj[name].address+"\")'>Sign as Node B</button></td></tr>";
+		html+="<tr><td>Feed In</td><td><button class='btn btn-primary' onclick='signPD(\"node_a\",\"in\",\""+powerchain.obj[name].address+"\")'>Sign as Node A</button>&nbsp;<button class='btn btn-primary' onclick='signPD(\"node_b\",\"in\",\""+powerchain.obj[name].address+"\")'>Sign as Node B</button></td></tr>";
 	}
 	if(powerchain.obj[name].feed_out()!=powerchain.null_addr) {
 		html+="<tr><td>Feed Out</td><td>"+typedLinkBuilder(powerchain.obj[name].feed_out(),'Node')+"</td></tr>";	
@@ -83,12 +87,22 @@ if(abi=="PowerDelivery") {
 	html+="<tr><td>Time Start</td><td>"+new Date(powerchain.obj[name].time_start()*1000).toLocaleString()+"</td></tr>";	
 	html+="<tr><td>Time End</td><td>"+new Date(powerchain.obj[name].time_end()*1000).toLocaleString()+"</td></tr>";	
 	html+="<tr><td>Total Power</td><td>"+powerchain.obj[name].total_power()+"</td></tr>";	
-	html+="<tr><td>Peak Power</td><td>"+powerchain.obj[name].peek_load()+"</td></tr>";
+	html+="<tr><td>Peak Power</td><td>"+powerchain.obj[name].peak_load()+"</td></tr>";
 	html+="<tr><td>Min Power</td><td>"+powerchain.obj[name].min_load()+"</td></tr>";
 	html+="<tr><td>Bid In</td><td>"+powerchain.obj[name].bid_in()+"</td></tr>";
 	html+="<tr><td>Ask Out</td><td>"+powerchain.obj[name].ask_out()+"</td></tr>";
 	html+="<tr><td>Delivered In</td><td>"+powerchain.obj[name].delivered_in()+"</td></tr>";
 	html+="<tr><td>Delivered Out</td><td>"+powerchain.obj[name].delivered_out()+"</td></tr>";	
+	html+="<tr><td>SubBalance In</td><td>"+typedLinkBuilder(powerchain.obj[name].subbalance_in(),'SubBalance')+"</td></tr>";	
+	html+="<tr><td>SubBalance Out</td><td>"+typedLinkBuilder(powerchain.obj[name].subbalance_out(),'SubBalance')+"</td></tr>";		
+}
+if(abi=="SubBalance") {
+	html+="<tr><td>Metering</td><td>"+typedLinkBuilder(powerchain.obj[name].metering(),'Metering')+"</td></tr>";
+	html+="<tr><td>Node</td><td>"+typedLinkBuilder(powerchain.obj[name].node(),'Node')+"</td></tr>";
+	html+="<tr><td>PowerDelivery</td><td>"+typedLinkBuilder(powerchain.obj[name].pd(),'PowerDelivery')+"</td></tr>";
+	html+="<tr><td>Balanced</td><td>"+powerchain.obj[name].balanced()+"</td></tr>";
+	html+="<tr><td>Open Time</td><td>"+new Date(powerchain.obj[name].open_time()*1000).toLocaleString()+"</td></tr>";
+	html+="<tr><td>Last Update</td><td>"+new Date(powerchain.obj[name].last_update()*1000).toLocaleString()+"</td></tr>";
 }
 html+="</table>";
 $('#'+name).html(html);
@@ -117,12 +131,18 @@ function loadDeployment() {
 }
 
 function signPD(node,dir,pd) {
-	if(dir=="in") {
-		powerchain.obj[node].signSellFeedIn(pd,1,{from:powerchain.obj[node].manager()});
-	} else {
-		powerchain.obj[node].signBuyFeedOut(pd,100,{from:powerchain.obj[node].manager()});
+	try {
+		if(dir=="in") {
+			console.log(node,dir,pd);
+			powerchain.obj[node].signSellFeedIn(pd,1,{from:powerchain.obj[node].manager()});
+		} else {
+			powerchain.obj[node].signBuyFeedOut(pd,100,{from:powerchain.obj[node].manager()});
+		}
+		location.reload(true);
+	} catch(e) {
+		$('#errortxt').html(e);
+		$('.alert-danger').toggle();
 	}
-	location.reload(true);
 }
 function openTypedLink(address,abi) {
 	if(abi=="Account") {
@@ -131,15 +151,17 @@ function openTypedLink(address,abi) {
 		loadInstance(abi,address,"preview");
 	}
 }
-function createDelivery(node) {
+function createDelivery(node,feed_in) {
     var t = new Date().getTime();
 	t=t/1000;
 	
-	powerchain.obj[node].createOffer(true,t+120,t+600,10,10,0,10,{from:powerchain.obj[node].manager()});
+	powerchain.obj[node].createOffer(feed_in,t+120,t+600,10,10,0,10,{from:powerchain.obj[node].manager()});
 	location.reload(true);
 	
 }
-
+function balanceDeliveries(node) {
+	powerchain.obj[node].balanceDeliveries({from:powerchain.obj[node].manager()});
+}
 
 
 function updateReading(meter) {
